@@ -1,0 +1,10 @@
+{
+  "name": "ニュースを聴こう",
+  "short_name": "ニュース音声",
+  "description": "ニュース見出しを読み上げ、気になる記事を選んで聴く試作アプリ",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f3f6fa",
+  "theme_color": "#16345c",
+  "lang": "ja"
+}

@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#16345c">
+<meta name="description" content="ニュース見出しを読み上げ、気になる記事を選んで聴くための試作アプリ">
+<link rel="manifest" href="manifest.webmanifest">
+<title>ニュースを聴こう</title>
+<style>
+:root{color-scheme:light;--navy:#16345c;--blue:#235a94;--bg:#f3f6fa;--ink:#182435;--muted:#657286}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif;color:var(--ink)}
+header{background:var(--navy);color:#fff;padding:22px 18px 20px;border-radius:0 0 22px 22px}
+header h1{font-size:1.45rem;margin:0 0 5px}header p{margin:0;color:#d8e5f5;font-size:.9rem}
+main{max-width:760px;margin:auto;padding:16px;display:grid;gap:14px}
+.card{background:#fff;border-radius:16px;padding:16px;box-shadow:0 2px 10px #142b4510}
+h2{font-size:1.05rem;margin:0 0 12px}.note{font-size:.85rem;color:var(--muted);line-height:1.55}
+button,.button{border:0;border-radius:12px;padding:12px 14px;background:var(--blue);color:white;font:inherit;font-weight:650;cursor:pointer}
+button.secondary{background:#e8eef6;color:var(--navy)}button:disabled{opacity:.45}
+.controls{display:flex;flex-wrap:wrap;gap:8px}.controls button{flex:1;min-width:110px}
+.headline{border:1px solid #e0e6ee;border-radius:12px;padding:12px;margin:8px 0;display:flex;align-items:flex-start;gap:10px}
+.headline .num{background:#e8eef6;color:var(--navy);border-radius:9px;min-width:34px;height:34px;display:grid;place-items:center;font-weight:800}
+.headline .txt{flex:1;line-height:1.45}.headline button{padding:8px 10px;font-size:.85rem}
+.status{font-size:.9rem;background:#edf4fb;border-radius:10px;padding:10px;color:#24466f}
+label{font-size:.9rem;font-weight:650;display:block;margin-bottom:7px}textarea{width:100%;min-height:90px;border:1px solid #cbd5e1;border-radius:10px;padding:10px;font:inherit}
+input[type=range]{width:100%}footer{text-align:center;color:var(--muted);font-size:.8rem;padding:0 16px 28px}
+a{color:#1e5a98} .warning{background:#fff7e7;color:#6c4c0b;padding:11px;border-radius:10px;font-size:.84rem;line-height:1.5}
+</style>
+</head>
+<body>
+<header><h1>🎧 ニュースを聴こう</h1><p>見出しを聴いて、気になるニュースを選ぶ</p></header>
+<main>
+<section class="card">
+<h2>音声操作</h2>
+<div class="controls">
+<button id="listenAll">▶ 見出しを順番に聴く</button>
+<button id="voicePick" class="secondary">🎙 音声で番号指定</button>
+<button id="stop" class="secondary">■ 停止</button>
+</div>
+<p class="note">音声で「2番」「次」「最初から」「停止」などと話してください。音声入力はChromeなど対応ブラウザーで動作します。</p>
+<div id="status" class="status" aria-live="polite">準備完了。まずはサンプル見出しで動作を試せます。</div>
+</section>
+<section class="card">
+<h2>今日の見出し</h2>
+<p class="warning">この試作に表示しているのは動作確認用のサンプルです。読売新聞の最新記事を自動取得しているわけではありません。</p>
+<div id="headlines"></div>
+<div class="controls">
+<button id="readAll">見出しを読み上げる</button>
+<button id="yomiuri" class="secondary">読売新聞オンラインを開く ↗</button>
+</div>
+</section>
+<section class="card">
+<h2>記事本文・要約を聴く</h2>
+<p class="note">読売新聞の記事ページを開き、利用できる本文や要約を下に貼り付けると読み上げできます。記事全文の自動取得は未実装です。</p>
+<label for="articleText">読み上げたい文章</label>
+<textarea id="articleText" placeholder="記事の要約や、自分で利用できる文章を貼り付けてください"></textarea>
+<div class="controls" style="margin-top:10px">
+<button id="readArticle">▶ 文章を読み上げる</button>
+<button id="pause" class="secondary">一時停止 / 再開</button>
+</div>
+<label for="rate" style="margin-top:14px">読み上げ速度：<span id="rateValue">1.0</span>倍</label>
+<input id="rate" type="range" min="0.7" max="1.3" value="1" step="0.1">
+</section>
+<section class="card">
+<h2>自分の見出しを試す</h2>
+<p class="note">1行につき1見出しで入力すると、番号選択と読み上げを試せます。</p>
+<textarea id="customHeadlines" placeholder="例：&#10;国内の主なニュース&#10;経済・マーケット&#10;国際ニュース"></textarea>
+<div class="controls" style="margin-top:10px"><button id="applyCustom">見出しを反映</button><button id="reset" class="secondary">サンプルに戻す</button></div>
+</section>
+</main>
+<footer>個人用プロトタイプ • 読売新聞社の公式アプリではありません。記事の利用は各サイトの規約に従ってください。</footer>
+<script>
+const samples = [
+"国内の主なニュース（サンプル見出し）",
+"経済・マーケットの動き（サンプル見出し）",
+"国際ニュース（サンプル見出し）",
+"科学・テクノロジー（サンプル見出し）",
+"スポーツの話題（サンプル見出し）"
+];
+let headlines = [...samples], current = 0, recognition = null;
+const $ = id => document.getElementById(id);
+function setStatus(s){$('status').textContent=s}
+function speak(text, onend){
+ if(!('speechSynthesis' in window)){setStatus('このブラウザーは音声読み上げに対応していません。Chromeで開いてください。');return}
+ speechSynthesis.cancel();
+ const u=new SpeechSynthesisUtterance(text);u.lang='ja-JP';u.rate=Number($('rate').value);
+ if(onend)u.onend=onend;
+ u.onerror=()=>setStatus('読み上げに失敗しました。端末の音声設定を確認してください。');
+ speechSynthesis.speak(u);
+}
+function render(){
+ $('headlines').innerHTML='';
+ headlines.forEach((h,i)=>{
+  const row=document.createElement('div');row.className='headline';
+  const n=document.createElement('div');n.className='num';n.textContent=i+1;
+  const t=document.createElement('div');t.className='txt';t.textContent=h;
+  const b=document.createElement('button');b.textContent='聴く';b.setAttribute('aria-label',`${i+1}番を読み上げ`);
+  b.onclick=()=>{current=i;setStatus(`${i+1}番を読み上げています`);speak(`${i+1}番。${h}`)};
+  row.append(n,t,b);$('headlines').append(row);
+ });
+}
+function readSequential(i=0){
+ if(i>=headlines.length){setStatus('見出しの読み上げが終わりました');return}
+ current=i;setStatus(`${i+1}番を読み上げています`);
+ speak(`${i+1}番。${headlines[i]}`,()=>setTimeout(()=>readSequential(i+1),350));
+}
+$('listenAll').onclick=()=>readSequential(0);
+$('readAll').onclick=()=>readSequential(0);
+$('stop').onclick=()=>{speechSynthesis.cancel();if(recognition)recognition.stop();setStatus('停止しました')};
+$('readArticle').onclick=()=>{const t=$('articleText').value.trim();if(!t){setStatus('読み上げたい文章を入力してください');return}setStatus('文章を読み上げています');speak(t)};
+$('pause').onclick=()=>{if(speechSynthesis.paused)speechSynthesis.resume();else speechSynthesis.pause()};
+$('rate').oninput=()=> $('rateValue').textContent=Number($('rate').value).toFixed(1);
+$('yomiuri').onclick=()=>window.open('https://www.yomiuri.co.jp/','_blank','noopener');
+$('applyCustom').onclick=()=>{const lines=$('customHeadlines').value.split(/\n/).map(x=>x.trim()).filter(Boolean);if(!lines.length){setStatus('見出しを1行以上入力してください');return}headlines=lines;render();setStatus(`${lines.length}件の見出しを反映しました`)};
+$('reset').onclick=()=>{headlines=[...samples];$('customHeadlines').value='';render();setStatus('サンプル見出しに戻しました')};
+$('voicePick').onclick=()=>{
+ const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+ if(!SR){setStatus('このブラウザーでは音声入力が使えないようです。画面の「聴く」ボタンを使ってください。');return}
+ try{
+  recognition=new SR();recognition.lang='ja-JP';recognition.interimResults=false;recognition.maxAlternatives=1;
+  setStatus('聞き取り中です。「2番」「次」「最初から」「停止」などと話してください。');
+  recognition.onresult=e=>{
+   const said=e.results[0][0].transcript;setStatus(`聞き取り：${said}`);
+   if(/停止|やめ/.test(said)){speechSynthesis.cancel();return}
+   if(/次/.test(said)){readSequential(Math.min(current+1,headlines.length-1));return}
+   if(/最初|はじめ/.test(said)){readSequential(0);return}
+   const m=said.match(/(\d+|[一二三四五六七八九十])\s*番/);
+   if(m){const map={'一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9,'十':10};const num=/\d/.test(m[1])?Number(m[1]):map[m[1]];if(num>=1&&num<=headlines.length){current=num-1;setStatus(`${num}番を読み上げています`);speak(`${num}番。${headlines[current]}`)}else setStatus('その番号の見出しはありません');}
+   else setStatus('番号を認識できませんでした。例：「2番」と話してください。');
+  };
+  recognition.onerror=e=>setStatus(`音声入力エラー：${e.error}。画面のボタンも利用できます。`);
+  recognition.onend=()=>{recognition=null};recognition.start();
+ }catch(e){setStatus('音声入力を開始できませんでした。Chromeのマイク権限を確認してください。')}
+};
+if('serviceWorker' in navigator && location.protocol.startsWith('http'))window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+render();
+</script>
+</body></html>
